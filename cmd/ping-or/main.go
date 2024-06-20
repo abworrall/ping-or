@@ -1,5 +1,7 @@
 package main
 
+// For raspberry pi: `GOOS=linux GOARCH=arm64 go build github.com/abworrall/ping-orcmd/ping-or/*go`
+
 // If you run this and see `panic: socket: permission denied`
 // then try `# sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"`
 
@@ -59,7 +61,7 @@ func executeAction() {
 
 	output, err := exec.Command(args[0], args[1:]...).Output()
 	if err != nil {
-		switch e := err.(type) {
+		switch err.(type) {
 		case *exec.Error:
 			log.Println("exec failed:", err)
 		//case *exec.ExitError:
@@ -68,8 +70,8 @@ func executeAction() {
 			panic(err)
 		}
 	}
-	log.Printf(">>>>>> action output\n%s\n")
-	log.Printf("<<<<<<\n"
+	log.Printf(">>>>>> action output\n%s\n", output)
+	log.Printf("<<<<<<\n")
 	
 	time.Sleep(fActionWaitTime)
 }
