@@ -1,6 +1,6 @@
 package main
 
-// For raspberry pi: `GOOS=linux GOARCH=arm64 go build github.com/abworrall/ping-orcmd/ping-or/*go`
+// For raspberry pi: `GOOS=linux GOARCH=arm go build github.com/abworrall/ping-orcmd/ping-or/*go`
 
 // If you run this and see `panic: socket: permission denied`
 // then try `# sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"`
