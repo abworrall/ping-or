@@ -1,11 +1,12 @@
 package main
 
-// For raspberry pi: `GOOS=linux GOARCH=arm go build github.com/abworrall/ping-orcmd/ping-or/*go`
+// For raspberry pi: `GOOS=linux GOARCH=arm go build github.com/abworrall/ping-or/cmd/ping-or/*go`
 
 // If you run this and see `panic: socket: permission denied`
 // then try `# sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"`
 
 import(
+	"embed"
 	"flag"
 	"io"
 	"log"
@@ -23,18 +24,36 @@ var(
 	fAction string
 	fActionWaitTime time.Duration
 	fVerbose = true
+	scripts = map[string]string{}
 )
 
-var restartNetworkScript = `
-echo == restarting network kinda thing ==
-id
-`
+// embed all the bash scripts here
+//go:embed scripts/*
+var embeddedScripts embed.FS
+var scriptsDir = "scripts"
 
 func init() {
+	// Load up all the embedded scripts
+	entries, err := embeddedScripts.ReadDir(scriptsDir)
+	if err != nil {
+		log.Fatalf("embeddedScripts.ReadDir(%s): %v\n", scriptsDir, err)
+	}
+
+	for _, e := range entries {
+		name := scriptsDir + "/" + e.Name()
+		contents, err := embeddedScripts.ReadFile(name)
+		if err != nil {
+			log.Fatalf("embeddedScripts.ReadFile(%s): %v\n", name, err)
+		}
+
+		scripts[e.Name()] = string(contents)
+	}
+	log.Printf("(%d embedded scripts loaded)\n", len(scripts))
+
 	flag.StringVar(&fPingTarget, "dest", "8.8.8.8", "IP address that is going to to get pinged")
 	flag.DurationVar(&fPingFrequency, "freq", 5*time.Second, "duration to wait between pings")
 	flag.DurationVar(&fPingFailThreshold, "threshold", time.Minute, "how long pings can fail before we act")
-	flag.StringVar(&fAction, "cmd", "ls -l", "command to run when pings have failed for too long")
+	flag.StringVar(&fAction, "cmd", "restart-wlan0.sh", "command to run when pings have failed for too long")
 	flag.DurationVar(&fActionWaitTime, "wait", time.Minute, "after we act, how long to wait before resuming pinging")
 	flag.BoolVar(&fVerbose, "v", false, "verbose - log successful pings")
 	flag.Parse()
@@ -66,9 +85,10 @@ func executeAction() {
 
 	output := ""
 
-	switch fAction {
-	case "%restart-network%": output = runScript(restartNetworkScript)
-	default:                  output = runCommand(fAction)
+	if body, exists := scripts[fAction]; exists {
+		output = runScript(body)
+	} else {
+		output = runCommand(fAction)
 	}
 
 	log.Printf(">>>>>> action output\n%s\n", output)
@@ -91,6 +111,7 @@ func runScript(script string) string {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		log.Printf("script execution failed:-\n>>>>>>>>\n%s<<<<<<<<\n%s--------\nErr: %v\n", script, out, err)
 		panic(err)
 	}
 
