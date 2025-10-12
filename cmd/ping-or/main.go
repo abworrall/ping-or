@@ -7,6 +7,7 @@ package main
 
 import(
 	"flag"
+	"io"
 	"log"
 	"os/exec"
 	"strings"
@@ -23,6 +24,11 @@ var(
 	fActionWaitTime time.Duration
 	fVerbose = true
 )
+
+var restartNetworkScript = `
+echo == restarting network kinda thing ==
+id
+`
 
 func init() {
 	flag.StringVar(&fPingTarget, "dest", "8.8.8.8", "IP address that is going to to get pinged")
@@ -55,25 +61,59 @@ func pingLoop() {
 	}
 }
 
-func executeAction() {
+func executeAction() {	
 	log.Printf("*** Gonna do action %s, then wait for %s\n", fAction, fActionWaitTime)
-	args := strings.Fields(fAction)
+
+	output := ""
+
+	switch fAction {
+	case "%restart-network%": output = runScript(restartNetworkScript)
+	default:                  output = runCommand(fAction)
+	}
+
+	log.Printf(">>>>>> action output\n%s\n", output)
+	log.Printf("<<<<<<\n")
+	
+	time.Sleep(fActionWaitTime)
+}
+
+// runScript pipes the script contents into a bash shell for execution, and
+// returns the output
+func runScript(script string) string {
+	cmd := exec.Command("bash")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		panic(err)
+	}
+
+	io.WriteString(stdin, script)
+	stdin.Close()
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		panic(err)
+	}
+
+	return string(out)
+}
+
+func runCommand(cmdString string) string {
+	args := strings.Fields(cmdString)
 
 	output, err := exec.Command(args[0], args[1:]...).Output()
+
 	if err != nil {
 		switch err.(type) {
 		case *exec.Error:
 			log.Println("exec failed:", err)
-		//case *exec.ExitError:
+			//case *exec.ExitError:
 			// log.Println("command exit rc =", e.ExitCode())
 		default:
 			panic(err)
 		}
 	}
-	log.Printf(">>>>>> action output\n%s\n", output)
-	log.Printf("<<<<<<\n")
-	
-	time.Sleep(fActionWaitTime)
+
+	return string(output)
 }
 
 func ping() (pingOK bool, pingRtt time.Duration) {
